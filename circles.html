@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>NetrAI — Concentric Circle Reference</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
+    #info {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.85);
+      padding: 8px 16px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+    #info span { color: #aaa; }
+    #info strong { color: #ce93d8; }
+    #fullscreen-btn {
+      background: #6a1b9a;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <div>
+      <strong>NetrAI</strong>
+      <span id="ppi-label"> — detecting PPI…</span>
+    </div>
+    <button id="fullscreen-btn" onclick="goFullscreen()">Full Screen</button>
+  </div>
+  <canvas id="c"></canvas>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    // ── PPI detection ──────────────────────────────────────────────────────
+    function detectPPI() {
+      const ruler = document.createElement('div');
+      ruler.style.cssText = 'width:1in;height:1px;position:absolute;left:-9999px;visibility:hidden';
+      document.body.appendChild(ruler);
+      const cssPixelsPerInch = ruler.offsetWidth;
+      document.body.removeChild(ruler);
+      return cssPixelsPerInch * (window.devicePixelRatio || 1);
+    }
+
+    const ppi = detectPPI();
+    const pixelsPerMm = ppi / 25.4;
+    // 1 ring per mm — same spatial frequency as the grid
+    const ringPeriodPx = pixelsPerMm; // pixels per full black+white cycle
+
+    document.getElementById('ppi-label').textContent =
+      ` — ${ppi.toFixed(0)} PPI  •  ${pixelsPerMm.toFixed(2)} px/mm  •  1 ring/mm`;
+
+    // ── Canvas sizing ──────────────────────────────────────────────────────
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width  = window.innerWidth  * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width  = window.innerWidth  + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      draw();
+    }
+
+    // ── Concentric circle drawing ──────────────────────────────────────────
+    function draw() {
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.width;
+      const H = canvas.height;
+      const cx = W / 2;
+      const cy = H / 2;
+      const maxR = Math.sqrt(cx * cx + cy * cy);
+      const period = ringPeriodPx * dpr; // physical pixels per ring cycle
+
+      // White background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+
+      // Draw concentric rings outward — alternating black/white
+      // Each ring is half a period wide
+      let ringIndex = 0;
+      let r = period / 2;
+      while (r <= maxR + period) {
+        ctx.fillStyle = (ringIndex % 2 === 0) ? '#000000' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        r += period / 2;
+        ringIndex++;
+      }
+
+      // Centre alignment dot (red)
+      ctx.fillStyle = '#f44336';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 10mm scale bar (bottom-right)
+      const barLen = pixelsPerMm * dpr * 10;
+      const bx = W - barLen - 20 * dpr;
+      const by = H - 20 * dpr;
+      ctx.strokeStyle = '#f44336';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + barLen, by);
+      ctx.stroke();
+      ctx.fillStyle = '#f44336';
+      ctx.font = `${11 * dpr}px sans-serif`;
+      ctx.fillText('10mm', bx, by - 6 * dpr);
+    }
+
+    // ── Fullscreen ─────────────────────────────────────────────────────────
+    function goFullscreen() {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    }
+
+    // ── Wake lock ──────────────────────────────────────────────────────────
+    async function keepAwake() {
+      try {
+        if ('wakeLock' in navigator) {
+          await navigator.wakeLock.request('screen');
+        }
+      } catch (_) {}
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    keepAwake();
+  </script>
+</body>
+</html>
