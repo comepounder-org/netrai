@@ -203,11 +203,11 @@
             ctx.fillRect(0, 0, width, height);
             
             // Grid settings
+            // We want ~3mm gap with 1.5mm lines (50% duty cycle)
+            // 1 CSS pixel is roughly 0.158mm. 3mm is ~19 CSS px. Use 20px for clean math.
+            const gap = 20; 
+            ctx.lineWidth = 10;
             ctx.strokeStyle = "#000000";
-            ctx.lineWidth = 1.0;
-            
-            // Roughly ~1.5mm line spacing on modern smartphones (assume average 400 ppi -> ~20px per 1.5mm)
-            const gap = 24; 
 
             ctx.beginPath();
 
