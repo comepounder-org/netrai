@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NetrAI Lens Target</title>
+    <style>
+        :root {
+            --primary: #067ABD;
+            --secondary: #28D1C5;
+            --bg-color: #0A0F16;
+            --text-light: #FFFFFF;
+            --text-muted: #8E9BAE;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+
+        /* ── Landing UI ── */
+        .landing-container {
+            text-align: center;
+            padding: 40px;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            transition: opacity 0.5s ease-out, transform 0.5s ease;
+            z-index: 10;
+        }
+
+        .landing-container.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+
+        .icon-container {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 10px 20px rgba(6, 122, 189, 0.3);
+        }
+
+        .icon-container svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        h1 {
+            color: var(--text-light);
+            font-size: 28px;
+            margin: 0 0 16px 0;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        p {
+            color: var(--text-muted);
+            font-size: 15px;
+            line-height: 1.6;
+            margin: 0 0 32px 0;
+        }
+
+        .warning-box {
+            background: rgba(255, 167, 38, 0.1);
+            border: 1px solid rgba(255, 167, 38, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 32px;
+            display: flex;
+            align-items: center;
+            text-align: left;
+        }
+
+        .warning-box svg {
+            fill: #FFA726;
+            width: 24px;
+            height: 24px;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+
+        .warning-box span {
+            color: #FFA726;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .launch-btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 100px;
+            padding: 18px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+            outline: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 8px 16px rgba(6, 122, 189, 0.3);
+        }
+
+        .launch-btn:active {
+            transform: scale(0.97);
+        }
+
+        /* ── Canvas Layer ── */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            opacity: 0;
+            z-index: 1;
+            transition: opacity 0.5s ease-in;
+            pointer-events: none;
+        }
+
+        canvas.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="landing-container" id="landingUI">
+        <div class="icon-container">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+            </svg>
+        </div>
+        <h1>Lens Scanner Target</h1>
+        <p>Place your eyeglasses directly flat onto this screen. Ensure your primary phone hovers steadily above the glasses.</p>
+        
+        <div class="warning-box">
+            <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm1 16h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            <span>Please turn up your screen brightness to maximum before starting.</span>
+        </div>
+
+        <button class="launch-btn" id="launchBtn">Generate Pattern</button>
+    </div>
+
+    <!-- The ultra-precise vector grid -->
+    <canvas id="moireCanvas"></canvas>
+
+    <script>
+        const launchBtn = document.getElementById('launchBtn');
+        const landingUI = document.getElementById('landingUI');
+        const canvas = document.getElementById('moireCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for pure math rendering
+        let wakeLock = null;
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Wake Lock was released');
+                    });
+                }
+            } catch (err) {
+                console.warn(`${err.name}, ${err.message}`);
+            }
+        }
+
+        // Draw a highly precise, crisp crosshatch grid
+        function drawGrid() {
+            // Support Retina displays for maximum sharpness
+            const dpr = window.devicePixelRatio || 1;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            
+            // Normalize coordinate system
+            ctx.scale(dpr, dpr);
+            
+            // White background
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, width, height);
+            
+            // Grid settings
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = 1.0;
+            
+            // Roughly ~1.5mm line spacing on modern smartphones (assume average 400 ppi -> ~20px per 1.5mm)
+            const gap = 24; 
+
+            ctx.beginPath();
+
+            // Vertical lines
+            for (let x = 0; x <= width; x += gap) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+
+            // Horizontal lines
+            for (let y = 0; y <= height; y += gap) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+
+            ctx.stroke();
+
+            // Draw Central Crosshair for Lens Alignment
+            const cx = width / 2;
+            const cy = height / 2;
+            const crossSize = 100;
+            
+            ctx.strokeStyle = "#E53935"; // Red center tick to help user center the lens
+            ctx.lineWidth = 3.0;
+            ctx.beginPath();
+            ctx.moveTo(cx - crossSize, cy);
+            ctx.lineTo(cx + crossSize, cy);
+            ctx.moveTo(cx, cy - crossSize);
+            ctx.lineTo(cx, cy + crossSize);
+            ctx.stroke();
+            
+            // Central alignment dot
+            ctx.fillStyle = "#E53935";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Handle Launch
+        launchBtn.addEventListener('click', () => {
+            // Keep screen awake
+            requestWakeLock();
+
+            // Draw vector math
+            drawGrid();
+
+            // Handle rotations/resizes seamlessly
+            window.addEventListener('resize', drawGrid);
+
+            // Transition UI
+            landingUI.classList.add('hidden');
+            canvas.classList.add('visible');
+
+            // Force WebKit into fullscreen if on mobile and supported
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
